@@ -1,0 +1,5 @@
+{:name "dest"
+ :steps:
+ [(FROM template)
+  (COPY "foo.txt" "bar.txt")
+  (TEMPLATE "template.tmpl" "template.txt")]}
