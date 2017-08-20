@@ -6,6 +6,8 @@ const edn = require('jsedn')
 const path = require('path')
 const handlebars = require('handlebars')
 
+handlebars.registerHelper('dcurly', (object, open) =>  open ? '{{' : '}}')
+
 const CUSTODIAN_FILE = "Custodianfile"
 
 
@@ -32,6 +34,11 @@ async function applyStep(srcRoot, destRoot, step, context) {
     return { from: step.tag }
   } else if(step.type == "arg") {
     return { arg: { [step.name]: step.value }}
+  } else if(step.type == "mkdir") {
+    console.log(`MKDIR\t${step.dest}`)
+    try {
+      await fs.mkdir(absolutizePath(destRoot, step.dest))
+    } catch(ex) { }
   } else {
     throw new Error('Invalid step ' + JSON.stringify(step))
   }
@@ -69,6 +76,8 @@ function formatStep(step) {
     return { type, name: step[1], value: step[2] || step[3] }
   } else if (type === 'from') {
     return { type, tag: step[1] }
+  } else if (type === 'mkdir')  {
+    return {type, dest: step[1] };
   } else {
     throw new Error('Unknown command ' + step)
   }
