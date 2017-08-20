@@ -13,12 +13,16 @@ const absolutizePath = (root, rel) => path.normalize(`${root}/${rel}`)
 
 
 async function applyStep(srcRoot, destRoot, step, context) {
-  if (step.type === "copy") {
+  if (step.type[0] === 'x' && (await fs.exists(absolutizePath(destRoot, step.dest)))) {
+    console.log(`SKIP\t${step.dest}`)
+    return null
+  }
+  if (step.type === "copy" || step.type == "xcopy") {
     fse.copy(absolutizePath(srcRoot, step.src), absolutizePath(destRoot, step.dest))
     console.log(`COPY\t${step.src}\t${step.dest}`)
-  } else if (step.type === "template") {
+  } else if (step.type === "template" || step.type === "xtemplate") {
     const templateBfr = await fs.readFile(absolutizePath(srcRoot, step.src))
-    const template = handlebars.compile(templateBfr.toString())
+    const template = handlebars.compile(templateBfr.toString(), { noEscape: true })
     const result = template(context)
     const dest = absolutizePath(destRoot, step.dest)
     console.log(`TEMPLATE\t${step.src}\t${step.dest}`)
@@ -47,7 +51,7 @@ async function applyCustodianFile(srcRoot, destRoot, steps, tags, initialContext
         context = await applyCustodianFile(importedFile.root, destRoot, importedFile.steps, newTags, context)
       }
       if (specialAction.arg) {
-        return Object.assign({}, specialAction.arg, context)
+        context = Object.assign({}, specialAction.arg, context)
       }
     }
   }
@@ -56,7 +60,10 @@ async function applyCustodianFile(srcRoot, destRoot, steps, tags, initialContext
 
 function formatStep(step) {
   const type = step[0].toLowerCase()
-  if (type === 'template' || type === 'copy') {
+  if (type === 'template'
+      || type === 'copy'
+      || type === "xtemplate"
+      || type === "xcopy") {
     return { type, src: step[1], dest: step[2] || step[1] }
   } else if (type === 'arg') {
     return { type, name: step[1], value: step[2] || step[3] }
@@ -69,13 +76,13 @@ function formatStep(step) {
 
 function parseCustodianFile(data, root) {
   const parsed = edn.toJS(edn.parse(data.toString()))
-  console.log(parsed)
   const steps = parsed[':steps']
   const name = parsed[':name']
+  const noDest = !!parsed[':nodest']
   if (!Array.isArray(steps)) {
     throw new Error('Custodianfile must have an array of steps')
   }
-  return { [name]: { steps: steps.map(formatStep), name: name || root, root } }
+  return { [name]: { steps: steps.map(formatStep), name: name || root, root, noDest } }
 }
 
 async function readCustodianFile(root) {
@@ -99,7 +106,15 @@ async function main(imports, dest) {
     console.log("Nothing to do here...")
     return
   }
-  applyCustodianFile(dest, dest, destCust[destCustKey].steps, tags, {})
+
+  const destC = destCust[destCustKey]
+
+  if (destC.noDest) {
+    console.log("The specified destination has the `nodest` pragma. Stopping.")
+    return
+  }
+
+  applyCustodianFile(dest, dest, destC.steps, tags, {})
 }
 
 process.on('unhandledRejection', (reason, p) => {

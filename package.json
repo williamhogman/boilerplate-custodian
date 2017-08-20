@@ -1,6 +1,7 @@
 {
-  "name": "custodian-js",
+  "name": "boilerplate-custodian",
   "version": "1.0.0",
+
   "description": "",
   "main": "index.js",
   "bin": {
